@@ -634,16 +634,34 @@
                     <div id="driverAccountabilityNotice"></div>
 
                     <div class="driver-confirm" style="margin-top:14px;">
-                        <h4>Driver: Enter your username to confirm</h4>
-                        <div style="display:flex;gap:8px;margin-top:10px;">
+                        <div class="grid-2" style="margin-bottom:16px;">
+                            <div>
+                                <label class="label">Driver Name</label>
+                                <input class="input prefilled" readonly id="driverInfoName">
+                            </div>
+                            <div>
+                                <label class="label">Phone</label>
+                                <input class="input prefilled" readonly id="driverInfoPhone">
+                            </div>
+                            <div>
+                                <label class="label">Vehicle Plate</label>
+                                <input class="input prefilled" readonly id="driverInfoVehicle">
+                            </div>
+                            <div>
+                                <label class="label">Username (hidden)</label>
+                                <input class="input prefilled" readonly id="driverInfoUserMasked" style="letter-spacing:0.3em;font-size:1rem;">
+                            </div>
+                        </div>
+                        <h4 style="color:var(--navy);margin-bottom:8px;">Type your username below to sign off</h4>
+                        <div style="display:flex;gap:8px;">
                             <div class="pw-wrap" style="flex:1;">
-                                <input type="password" class="input" id="driverConfirmUser" placeholder="Driver username">
+                                <input type="password" class="input" id="driverConfirmUser" placeholder="Enter username to confirm">
                                 <span class="pw-eye" id="driverEye">👁️</span>
                             </div>
                             <button class="btn" id="confirmDriverBtn">CONFIRM</button>
                         </div>
                         <p style="font-size:0.72rem;color:#888;margin-top:6px;">
-                            By entering your username, you acknowledge the quantity above as delivered.
+                            By entering your username, you acknowledge the delivery quantity above.
                         </p>
                     </div>
 
@@ -757,8 +775,8 @@ let quantityMatch = null; // true/false
 async function loadData() {
     try {
         document.getElementById('loginLoading').textContent = 'Loading users.csv…';
-        const res  = await fetch('users.csv');
-        if (!res.ok) throw new Error('users.csv not found');
+        const res  = await fetch('users_phu.csv');
+        if (!res.ok) throw new Error('users_phu.csv not found');
         const text = await res.text();
         users = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
 
@@ -768,7 +786,7 @@ async function loadData() {
         document.getElementById('loginLoading').style.display = 'none';
     } catch (e) {
         document.getElementById('loginLoading').innerHTML =
-            '❌ ' + e.message + ' — ensure users.csv is in the same folder.';
+            '❌ ' + e.message + ' — ensure users_phu.csv is in the same folder.';
     }
 }
 
@@ -1041,9 +1059,17 @@ document.getElementById('rescanBtn').addEventListener('click', () => {
 // DRIVER SIGN-OFF
 // ═══════════════════════════════════════════
 function renderDriverStep() {
-    const exp    = parseInt(scannedData.total) || 0;
+    const exp     = parseInt(scannedData.total) || 0;
     const physTot = physCountIG2 + physCountPBO;
     const variance = physTot - exp;
+
+    // Populate driver info from QR (no CSV lookup needed)
+    document.getElementById('driverInfoName').value    = scannedData.driverName    || '—';
+    document.getElementById('driverInfoPhone').value   = scannedData.driverPhone   || '—';
+    document.getElementById('driverInfoVehicle').value = scannedData.vehiclePlate  || '—';
+    // Show username as dots — length reveals it without exposing it
+    const uLen = (scannedData.driverUsername || '').length;
+    document.getElementById('driverInfoUserMasked').value = '●'.repeat(uLen);
 
     // Summary banner at top of step 3
     const bDiv = document.getElementById('driverSummaryBanner');
@@ -1102,21 +1128,18 @@ document.getElementById('driverConfirmUser').addEventListener('keydown', e => {
 
 function confirmDriver() {
     const u = document.getElementById('driverConfirmUser').value.trim();
-    if (!u) { showToast('Enter driver username', 'error'); return; }
+    if (!u) { showToast('Enter your username', 'error'); return; }
 
-    const driver = users.find(x => x.username === u && x.role === 'Driver');
-    if (!driver) { showToast('Invalid driver username', 'error'); return; }
-
-    // Verify it's the correct driver for this dispatch
-    if (scannedData.driverUsername && driver.username !== scannedData.driverUsername) {
-        showToast(`Wrong driver — expected ${scannedData.driverName}`, 'error');
+    // Validate against the username embedded in the QR — no CSV lookup needed
+    if (u !== scannedData.driverUsername) {
+        showToast('Username does not match — try again', 'error');
         return;
     }
 
-    driverUser = driver;
-    document.getElementById('confirmedDriverName').textContent = driver.full_name;
+    driverUser = { username: u, full_name: scannedData.driverName, phone: scannedData.driverPhone };
+    document.getElementById('confirmedDriverName').textContent = scannedData.driverName;
     document.getElementById('confirmedDriverDetails').textContent =
-        `${driver.username} · ${driver.district || ''} · ${driver.phone || 'No phone'}`;
+        `${u} · ${scannedData.vehiclePlate} · ${scannedData.driverPhone || ''}`;
     document.getElementById('driverConfirmedCard').style.display = 'block';
     showToast('Driver confirmed — ready to finalise', 'success');
 }
